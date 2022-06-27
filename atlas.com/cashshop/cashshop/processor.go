@@ -72,6 +72,7 @@ func PurchaseCashShopItem(l logrus.FieldLogger, db *gorm.DB, span opentracing.Sp
 			l.Debugf("Character %d denied maple life coupon, because they are less than level 30.", characterId)
 			return errors.New("cannot purchase maple life")
 		}
+		return nil
 	}
 }
 
