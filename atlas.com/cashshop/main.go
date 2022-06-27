@@ -2,8 +2,8 @@ package main
 
 import (
 	"atlas-cashshop/cashshop"
-	character2 "atlas-cashshop/cashshop/character"
-	wishlist2 "atlas-cashshop/cashshop/character/wishlist"
+	"atlas-cashshop/cashshop/character"
+	"atlas-cashshop/cashshop/character/wishlist"
 	"atlas-cashshop/cashshop/item"
 	"atlas-cashshop/database"
 	"atlas-cashshop/kafka"
@@ -48,18 +48,18 @@ func main() {
 		l.WithError(err).Errorf("Unable to load quest cache.")
 	}
 
-	db := database.Connect(l, database.SetMigrations(character2.Migration, wishlist2.Migration))
+	db := database.Connect(l, database.SetMigrations(character.Migration, wishlist.Migration))
 
 	kafka.CreateConsumers(l, ctx, wg,
 		cashshop.EnterCashShopCommandConsumer()(consumerGroupId),
 		cashshop.PurchaseCashShopItemCommandConsumer(db)(consumerGroupId),
-		character2.CreatedConsumer(db)(consumerGroupId),
-		character2.AwardCreditConsumer(db)(consumerGroupId),
-		character2.AwardPointsConsumer(db)(consumerGroupId),
-		character2.AwardPrepaidConsumer(db)(consumerGroupId),
-		wishlist2.ModifyWishlistConsumer(db)(consumerGroupId))
+		character.CreatedConsumer(db)(consumerGroupId),
+		character.AwardCreditConsumer(db)(consumerGroupId),
+		character.AwardPointsConsumer(db)(consumerGroupId),
+		character.AwardPrepaidConsumer(db)(consumerGroupId),
+		wishlist.ModifyWishlistConsumer(db)(consumerGroupId))
 
-	rest.CreateService(l, db, ctx, wg, "/ms/cashshop", character2.InitResource, wishlist2.InitResource)
+	rest.CreateService(l, db, ctx, wg, "/ms/cashshop", character.InitResource, wishlist.InitResource)
 
 	// trap sigterm or interrupt and gracefully shutdown the server
 	c := make(chan os.Signal, 1)
