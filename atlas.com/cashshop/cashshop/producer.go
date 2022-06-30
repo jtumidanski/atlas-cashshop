@@ -42,20 +42,22 @@ func pollCashShopEntry(l logrus.FieldLogger, span opentracing.Span) func(worldId
 	}
 }
 
-type cashShopEntryRejection struct {
+type cashShopEntryRejectionEvent struct {
 	WorldId     byte   `json:"world_id"`
 	ChannelId   byte   `json:"channel_id"`
 	CharacterId uint32 `json:"character_id"`
+	MessageType string `json:"message_type"`
 	Message     string `json:"message"`
 }
 
-func emitCashShopEntryRejection(l logrus.FieldLogger, span opentracing.Span) func(worldId byte, channelId byte, characterId uint32, message string) {
+func emitCashShopEntryRejection(l logrus.FieldLogger, span opentracing.Span) func(worldId byte, channelId byte, characterId uint32, messageType string, message string) {
 	producer := kafka.ProduceEvent(l, span, "TOPIC_CASH_SHOP_ENTRY_REJECTION_EVENT")
-	return func(worldId byte, channelId byte, characterId uint32, message string) {
-		e := &cashShopEntryRejection{
+	return func(worldId byte, channelId byte, characterId uint32, messageType string, message string) {
+		e := &cashShopEntryRejectionEvent{
 			WorldId:     worldId,
 			ChannelId:   channelId,
 			CharacterId: characterId,
+			MessageType: messageType,
 			Message:     message,
 		}
 		producer(kafka.CreateKey(int(characterId)), e)

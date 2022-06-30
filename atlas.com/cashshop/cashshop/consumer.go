@@ -99,18 +99,19 @@ type entryPollResponse struct {
 	CharacterId uint32 `json:"character_id"`
 	Service     string `json:"service"`
 	Type        string `json:"type"`
+	MessageType string `json:"message_type"`
 	Message     string `json:"message"`
 }
 
 func handleEntryPollResponse() kafka.HandlerFunc[entryPollResponse] {
 	return func(l logrus.FieldLogger, span opentracing.Span, response entryPollResponse) {
 		if response.Type == "APPROVE" {
-			err := GatekeeperApproval(l, span)(response.Service, response.CharacterId, response.Message)
+			err := GatekeeperApproval(l, span)(response.Service, response.CharacterId, response.MessageType, response.Message)
 			if err != nil {
 				l.WithError(err).Errorf("Unable to process entry poll response for character %d from service %s.", response.CharacterId, response.Service)
 			}
 		} else if response.Type == "DENY" {
-			err := GatekeeperDenial(l, span)(response.Service, response.CharacterId, response.Message)
+			err := GatekeeperDenial(l, span)(response.Service, response.CharacterId, response.MessageType, response.Message)
 			if err != nil {
 				l.WithError(err).Errorf("Unable to process entry poll response for character %d from service %s.", response.CharacterId, response.Service)
 			}

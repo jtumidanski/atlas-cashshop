@@ -136,8 +136,8 @@ func emitEnter(l logrus.FieldLogger, span opentracing.Span) model.Operator[waiti
 	}
 }
 
-func GatekeeperApproval(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, message string) error {
-	return func(service string, characterId uint32, message string) error {
+func GatekeeperApproval(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, messageType string, message string) error {
+	return func(service string, characterId uint32, messageType string, message string) error {
 		l.Debugf("Service %s approved entry to cash shop for character %d.", service, characterId)
 		err := waiting.GetRegistry().AddApproval(characterId)
 		if err != nil {
@@ -151,14 +151,14 @@ func GatekeeperApproval(l logrus.FieldLogger, span opentracing.Span) func(servic
 	}
 }
 
-func GatekeeperDenial(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, message string) error {
-	return func(service string, characterId uint32, message string) error {
+func GatekeeperDenial(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, messageType string, message string) error {
+	return func(service string, characterId uint32, messageType string, message string) error {
 		l.Debugf("Service %s denied entry to cash shop for character %d.", service, characterId)
 
 		// Only error condition here is if the character has been rejected by another gatekeeper.
 		m, _ := waiting.GetRegistry().Remove(characterId)
 
-		emitCashShopEntryRejection(l, span)(m.WorldId(), m.ChannelId(), m.CharacterId(), message)
+		emitCashShopEntryRejection(l, span)(m.WorldId(), m.ChannelId(), m.CharacterId(), messageType, message)
 		return nil
 	}
 }
