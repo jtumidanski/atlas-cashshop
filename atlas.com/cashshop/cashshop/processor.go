@@ -2,8 +2,11 @@ package cashshop
 
 import (
 	"atlas-cashshop/cashshop/character"
+	"atlas-cashshop/cashshop/gatekeeper"
 	"atlas-cashshop/cashshop/item"
+	"atlas-cashshop/cashshop/waiting"
 	character2 "atlas-cashshop/character"
+	"atlas-cashshop/model"
 	"errors"
 	"github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -17,13 +20,22 @@ const UseSupplyRateCoupons = true
 func EnterCashShop(l logrus.FieldLogger, span opentracing.Span) func(worldId byte, channelId byte, characterId uint32) error {
 	return func(worldId byte, channelId byte, characterId uint32) error {
 		l.Infof("Character %d has attempted to enter the cash shop.", characterId)
+
+		if gatekeeper.GetRegistry().Count() == 0 {
+			// Shortcut gatekeeper process, as no one is participating.
+			emitEnterCashShop(l, span)(worldId, channelId, characterId)
+			return nil
+		}
+
+		// Poll cash shop gatekeepers to see if anyone is interested in denying entry.
+		pollCashShopEntry(l, span)(worldId, channelId, characterId)
+
 		// TODO verify character is allowed to enter cash shop
 		//   not using vegas spell
 		//   not registered for an event
 		//   not in mini dungeon
 		//   does not have cash shop already open
 
-		emitEnterCashShop(l, span)(worldId, channelId, characterId)
 		return nil
 	}
 }
@@ -89,4 +101,64 @@ func isRateCoupon(itemId uint32) bool {
 func isCashStore(itemId uint32) bool {
 	itemType := uint32(math.Floor(float64(itemId / 10000)))
 	return itemType == 503 || itemType == 514
+}
+
+func RegisterGatekeeper(l logrus.FieldLogger, _ opentracing.Span) func(service string) error {
+	return func(service string) error {
+		l.Debugf("Service %s has registered to be a gatekeeper for cash shop entry.", service)
+		gatekeeper.GetRegistry().Register(service)
+		return nil
+	}
+}
+
+func UnregisterGatekeeper(l logrus.FieldLogger, span opentracing.Span) func(service string) error {
+	return func(service string) error {
+		l.Debugf("Service %s has unregistered to be a gatekeeper for cash shop entry.", service)
+		gatekeeper.GetRegistry().Unregister(service)
+
+		err := waiting.GetRegistry().ProcessAllApproved(gatekeeper.GetRegistry().Count(), emitEnters(l, span))
+		if err != nil {
+			l.WithError(err).Errorf("Error issuing cash shop entry notifications.")
+			return err
+		}
+		return nil
+	}
+}
+
+func emitEnters(l logrus.FieldLogger, span opentracing.Span) func(m []waiting.Model) error {
+	return model.ExecuteForEach[waiting.Model](emitEnter(l, span))
+}
+
+func emitEnter(l logrus.FieldLogger, span opentracing.Span) model.Operator[waiting.Model] {
+	return func(m waiting.Model) error {
+		emitEnterCashShop(l, span)(m.WorldId(), m.ChannelId(), m.CharacterId())
+		return nil
+	}
+}
+
+func GatekeeperApproval(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, message string) error {
+	return func(service string, characterId uint32, message string) error {
+		l.Debugf("Service %s approved entry to cash shop for character %d.", service, characterId)
+		err := waiting.GetRegistry().AddApproval(characterId)
+		if err != nil {
+			l.WithError(err).Errorf("Unable to track character %d entry to cash shop via service %s.", characterId, service)
+			return err
+		}
+
+		// Only error condition here is if the character has been rejected by another gatekeeper.
+		_ = waiting.GetRegistry().ProcessIfApproved(characterId, gatekeeper.GetRegistry().Count(), emitEnter(l, span))
+		return nil
+	}
+}
+
+func GatekeeperDenial(l logrus.FieldLogger, span opentracing.Span) func(service string, characterId uint32, message string) error {
+	return func(service string, characterId uint32, message string) error {
+		l.Debugf("Service %s denied entry to cash shop for character %d.", service, characterId)
+
+		// Only error condition here is if the character has been rejected by another gatekeeper.
+		m, _ := waiting.GetRegistry().Remove(characterId)
+
+		emitCashShopEntryRejection(l, span)(m.WorldId(), m.ChannelId(), m.CharacterId(), message)
+		return nil
+	}
 }

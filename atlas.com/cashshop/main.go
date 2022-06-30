@@ -51,8 +51,10 @@ func main() {
 	db := database.Connect(l, database.SetMigrations(character.Migration, wishlist.Migration))
 
 	kafka.CreateConsumers(l, ctx, wg,
-		cashshop.EnterCashShopCommandConsumer()(consumerGroupId),
-		cashshop.PurchaseCashShopItemCommandConsumer(db)(consumerGroupId),
+		cashshop.EnterCommandConsumer()(consumerGroupId),
+		cashshop.PurchaseItemCommandConsumer(db)(consumerGroupId),
+		cashshop.GatekeeperCommandConsumer()(consumerGroupId),
+		cashshop.EntryPollResponseConsumer()(consumerGroupId),
 		character.CreatedConsumer(db)(consumerGroupId),
 		character.AwardCreditConsumer(db)(consumerGroupId),
 		character.AwardPointsConsumer(db)(consumerGroupId),
