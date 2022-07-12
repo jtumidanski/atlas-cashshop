@@ -28,12 +28,16 @@ func EnterCashShop(l logrus.FieldLogger, span opentracing.Span) func(worldId byt
 		}
 
 		// Poll cash shop gatekeepers to see if anyone is interested in denying entry.
+		err := waiting.GetRegistry().Add(worldId, channelId, characterId)
+		if err != nil {
+			l.WithError(err).Errorf("Unable to add character %d to waitlist for cash shop entry.", characterId)
+			return err
+		}
 		pollCashShopEntry(l, span)(worldId, channelId, characterId)
 
 		// TODO verify character is allowed to enter cash shop
 		//   not using vegas spell
 		//   not registered for an event
-		//   not in mini dungeon
 		//   does not have cash shop already open
 
 		return nil
